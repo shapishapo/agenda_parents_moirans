@@ -1,220 +1,195 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda Senior</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            color: #333;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: space-around;
-        }
-        .colonne {
-            width: 45%;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            text-align: center;
-            font-size: 2.5em;
-            color: #2c3e50;
-            margin-bottom: 5px;
-        }
-        h2 {
-            text-align: center;
-            font-size: 1.5em;
-            color: #7f8c8d;
-            margin-top: 0;
-            margin-bottom: 20px;
-        }
-        .evenement {
-            margin-bottom: 15px;
-            padding: 10px;
-            background-color: #e8f4fc;
-            border-radius: 5px;
-            font-size: 1.8em;
-        }
-        .heure {
-            font-weight: bold;
-            color: #2980b9;
-        }
-        .vide {
-            text-align: center;
-            color: #7f8c8d;
-            font-style: italic;
-            font-size: 1.5em;
-        }
-    </style>
-    <!-- Ajout de la bibliothèque ical.js -->
-    <script src="https://cdn.jsdelivr.net/npm/ical.js@1.4.0/build/ical.min.js"></script>
+<meta charset="UTF-8">
+<title>Agenda Parents</title>
+
+<script src="https://cdn.jsdelivr.net/npm/rrule@2.7.1/dist/es5/rrule.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    background: #f4f6f8;
+}
+.colonne {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+h1 { font-size: 3em; text-align: center; }
+h2 { text-align: center; color: gray; }
+.evenement {
+    font-size: 1.6em;
+    background: #e3f2fd;
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 8px;
+}
+</style>
 </head>
+
 <body>
-    <div class="colonne" id="aujourdhui">
-        <h1>Aujourd'hui</h1>
-        <h2 id="date-aujourdhui"></h2>
-        <div id="evenements-aujourdhui"></div>
-    </div>
-    <div class="colonne" id="demain">
-        <h1>Demain</h1>
-        <h2 id="date-demain"></h2>
-        <div id="evenements-demain"></div>
-    </div>
 
-    <script>
-        // Fonction pour formater la date (ex: "Lundi 23 mars")
-        function formaterDate(date) {
-            const options = { weekday: 'long', day: 'numeric', month: 'long' };
-            return date.toLocaleDateString('fr-FR', options);
+<div class="colonne">
+    <h1>Aujourd'hui</h1>
+    <h2 id="date-aujourdhui"></h2>
+    <div id="today"></div>
+</div>
+
+<div class="colonne">
+    <h1>Demain</h1>
+    <h2 id="date-demain"></h2>
+    <div id="tomorrow"></div>
+</div>
+
+<script>
+    
+// remplacer 🔥 l'adresse ical 🔥
+const ICS_URL = "https://corsproxy.io/?" + encodeURIComponent("https://calendar.google.com/calendar/ical/2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a%40group.calendar.google.com/public/basic.ics");
+
+// -------- FORMAT --------
+
+function formatDate(date) {
+    return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+    });
+}
+
+function formatHeure(date) {
+    return date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// -------- PARSE ICS --------
+
+function parseICS(data) {
+    const events = [];
+    const lignes = data.split(/\r?\n/);
+
+    let event = null;
+
+    lignes.forEach(line => {
+        line = line.trim();
+
+        if (line === "BEGIN:VEVENT") event = {};
+        else if (line === "END:VEVENT") {
+            events.push(event);
+            event = null;
         }
-
-        // Fonction pour formater l'heure (ex: "09:00")
-        function formaterHeure(date) {
-            return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        else if (event) {
+            if (line.startsWith("DTSTART")) event.start = line.split(":")[1];
+            if (line.startsWith("DTEND")) event.end = line.split(":")[1];
+            if (line.startsWith("SUMMARY")) event.summary = line.split(":")[1];
+            if (line.startsWith("RRULE")) event.rrule = line.substring(6);
         }
+    });
 
-        // Fonction pour charger et parser le fichier ICS
-        async function chargerEvenementsICS(urlICS) {
-            try {
-                const response = await fetch(urlICS);
-                const icsData = await response.text();
+    return events;
+}
 
-                // Parser le fichier ICS avec ical.js
-                const jcalData = ICAL.parse(icsData);
-                const vcalendar = new ICAL.Component(jcalData);
-                const vevents = vcalendar.getAllSubcomponents('vevent');
+// -------- DATE ICS --------
 
-                // Extraire les événements avec leurs propriétés
-                return vevents.map(vevent => {
-                    const event = new ICAL.Event(vevent);
-                    return {
-                        summary: event.summary,
-                        start: event.startDate.toJSDate(),
-                        end: event.endDate.toJSDate(),
-                        component: vevent, // Conserver le composant pour les règles de répétition
-                        rrule: event.component.getFirstPropertyValue('rrule') // Règle de répétition (si elle existe)
-                    };
-                });
-            } catch (error) {
-                console.error("Erreur lors du chargement du fichier ICS :", error);
-                return [];
-            }
-        }
+function parseDateICS(str) {
+    return new Date(
+        str.slice(0,4)+"-"+str.slice(4,6)+"-"+str.slice(6,8)+"T"+
+        str.slice(9,11)+":"+str.slice(11,13)+":00"
+    );
+}
 
-        // Fonction pour générer les occurrences des événements récurrents
-        function genererOccurrences(events, dateDebut, dateFin) {
-            const occurrences = [];
+// -------- GÉNÉRATION OCCURRENCES --------
 
-            events.forEach(event => {
-                if (event.rrule) {
-                    // Développer les occurrences pour les événements récurrents
-                    const rule = new ICAL.RecurExpansion({
-                        component: event.component,
-                        dtstart: event.start
-                    });
-                    const nextOccurrences = rule.between(dateDebut, dateFin);
+function generateOccurrences(event, dateStart, dateEnd) {
+    if (!event.rrule) {
+        const d = parseDateICS(event.start);
+        return [{ date: d, event }];
+    }
 
-                    nextOccurrences.forEach(occurrence => {
-                        const endDate = new Date(occurrence.toJSDate().getTime() + (event.end.getTime() - event.start.getTime()));
-                        occurrences.push({
-                            summary: event.summary,
-                            start: occurrence.toJSDate(),
-                            end: endDate
-                        });
-                    });
-                } else {
-                    // Ajouter les événements non récurrents
-                    if (event.start >= dateDebut && event.start <= dateFin) {
-                        occurrences.push(event);
-                    }
-                }
-            });
+    const options = RRule.parseString(event.rrule);
+    options.dtstart = parseDateICS(event.start);
 
-            // Supprimer les doublons (si un événement récurrent a déjà une occurrence dans la période)
-            const uniqueOccurrences = occurrences.reduce((acc, current) => {
-                const isDuplicate = acc.some(event =>
-                    event.summary === current.summary &&
-                    event.start.getTime() === current.start.getTime()
-                );
-                if (!isDuplicate) {
-                    acc.push(current);
-                }
-                return acc;
-            }, []);
+    const rule = new RRule(options);
 
-            return uniqueOccurrences.sort((a, b) => a.start - b.start);
-        }
+    const dates = rule.between(dateStart, dateEnd, true);
 
-        // Fonction pour afficher les événements
-        async function afficherAgenda() {
-            const aujourdhui = new Date();
-            aujourdhui.setHours(0, 0, 0, 0); // Début de la journée
-            const demain = new Date(aujourdhui);
-            demain.setDate(demain.getDate() + 1);
-            const aprèsDemain = new Date(demain);
-            aprèsDemain.setDate(aprèsDemain.getDate() + 1);
+    return dates.map(d => ({
+        date: d,
+        event
+    }));
+}
 
-            // Mettre à jour les dates en h2
-            document.getElementById('date-aujourdhui').textContent = formaterDate(aujourdhui);
-            document.getElementById('date-demain').textContent = formaterDate(demain);
+// -------- AFFICHAGE --------
 
-            // 🔥 Remplacez par l'URL de votre fichier ICS (obtenue depuis Google Agenda)
-            const urlICS = 'https://calendar.google.com/calendar/ical/2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a%40group.calendar.google.com/public/basic.ics';
+function afficher(events, dateRef, containerId) {
 
-            // Charger et parser les événements
-            const events = await chargerEvenementsICS(urlICS);
+    const startDay = new Date(dateRef);
+    startDay.setHours(0,0,0,0);
 
-            // Générer les occurrences pour aujourd'hui et demain
-            const occurrences = genererOccurrences(events, aujourdhui, aprèsDemain);
+    const endDay = new Date(dateRef);
+    endDay.setHours(23,59,59,999);
 
-            // Filtrer les événements pour aujourd'hui
-            const evenementsAujourdhui = occurrences.filter(event =>
-                event.start.toDateString() === aujourdhui.toDateString()
-            );
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
 
-            // Filtrer les événements pour demain
-            const evenementsDemain = occurrences.filter(event =>
-                event.start.toDateString() === demain.toDateString()
-            );
+    let occurrences = [];
 
-            // Afficher les événements d'aujourd'hui
-            const containerAujourdhui = document.getElementById('evenements-aujourdhui');
-            containerAujourdhui.innerHTML = '';
-            if (evenementsAujourdhui.length === 0) {
-                containerAujourdhui.innerHTML = '<div class="vide">Aucun événement prévu aujourd\'hui.</div>';
-            } else {
-                evenementsAujourdhui.forEach(event => {
-                    const div = document.createElement('div');
-                    div.className = 'evenement';
-                    div.innerHTML = `<span class="heure">${formaterHeure(event.start)} - ${formaterHeure(event.end)}</span>: ${event.summary || "Événement sans titre"}`;
-                    containerAujourdhui.appendChild(div);
-                });
-            }
+    events.forEach(event => {
+        occurrences = occurrences.concat(
+            generateOccurrences(event, startDay, endDay)
+        );
+    });
 
-            // Afficher les événements de demain
-            const containerDemain = document.getElementById('evenements-demain');
-            containerDemain.innerHTML = '';
-            if (evenementsDemain.length === 0) {
-                containerDemain.innerHTML = '<div class="vide">Aucun événement prévu demain.</div>';
-            } else {
-                evenementsDemain.forEach(event => {
-                    const div = document.createElement('div');
-                    div.className = 'evenement';
-                    div.innerHTML = `<span class="heure">${formaterHeure(event.start)} - ${formaterHeure(event.end)}</span>: ${event.summary || "Événement sans titre"}`;
-                    containerDemain.appendChild(div);
-                });
-            }
-        }
+    occurrences.sort((a,b) => a.date - b.date);
 
-        // Rafraîchir l'affichage toutes les 15 minutes
-        afficherAgenda();
-        setInterval(afficherAgenda, 15 * 60 * 1000);
-    </script>
+    if (occurrences.length === 0) {
+        container.innerHTML = "<div>Aucun événement</div>";
+        return;
+    }
+
+    occurrences.forEach(o => {
+        const div = document.createElement("div");
+        div.className = "evenement";
+
+        const start = o.date;
+        const end = o.event.end ? parseDateICS(o.event.end) : null;
+
+        div.innerHTML =
+            `${formatHeure(start)} - ${end ? formatHeure(end) : ""} : ${o.event.summary}`;
+
+        container.appendChild(div);
+    });
+}
+
+// -------- MAIN --------
+
+async function charger() {
+    const res = await fetch(ICS_URL);
+    const text = await res.text();
+
+    const events = parseICS(text);
+
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+
+    document.getElementById("date-aujourdhui").textContent = formatDate(today);
+    document.getElementById("date-demain").textContent = formatDate(tomorrow);
+
+    afficher(events, today, "today");
+    afficher(events, tomorrow, "tomorrow");
+}
+
+charger();
+setInterval(charger, 300000);
+
+</script>
+
 </body>
 </html>
