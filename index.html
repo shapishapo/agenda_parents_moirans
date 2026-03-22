@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agenda Senior</title>
+<title>Agenda Parents</title>
 
 <style>
 body {
@@ -73,8 +73,10 @@ h2 {
 
 <script>
 
-// 👉 COLLE ICI TON LIEN ICS
+// 🔥 COLLE TON LIEN ICS ICI (adresse secrète Google)
 const ICS_URL = "https://api.allorigins.win/raw?url=https://calendar.google.com/calendar/ical/2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a%40group.calendar.google.com/public/basic.ics";
+
+// ---------------- UTILITAIRES ----------------
 
 function formatDate(date) {
     return date.toLocaleDateString('fr-FR', {
@@ -91,43 +93,58 @@ function formatHeure(date) {
     });
 }
 
-// Parser simple ICS
+// ---------------- PARSER ICS ROBUSTE ----------------
+
 function parseICS(data) {
     const events = [];
-    const lignes = data.split("\n");
+    const lignes = data.split(/\r?\n/);
 
     let event = null;
 
     lignes.forEach(line => {
         line = line.trim();
 
-        if (line === "BEGIN:VEVENT") event = {};
-        else if (line === "END:VEVENT") {
+        if (line === "BEGIN:VEVENT") {
+            event = {};
+        } else if (line === "END:VEVENT") {
             events.push(event);
             event = null;
-        }
-        else if (event) {
-            if (line.startsWith("DTSTART")) event.start = line.substring(line.indexOf(":") + 1);
-            if (line.startsWith("DTEND")) event.end = line.substring(line.indexOf(":") + 1);
-            if (line.startsWith("SUMMARY")) event.summary = line.substring(line.indexOf(":") + 1);
+        } else if (event) {
+
+            if (line.startsWith("DTSTART")) {
+                event.start = line.substring(line.indexOf(":") + 1);
+            }
+
+            if (line.startsWith("DTEND")) {
+                event.end = line.substring(line.indexOf(":") + 1);
+            }
+
+            if (line.startsWith("SUMMARY")) {
+                event.summary = line.substring(line.indexOf(":") + 1);
+            }
         }
     });
 
     return events;
 }
 
+// ---------------- DATE ICS → JS ----------------
+
 function parseDateICS(dateStr) {
     if (!dateStr) return null;
 
+    // format avec heure
     if (dateStr.includes("T")) {
         return new Date(
             dateStr.slice(0,4) + "-" +
             dateStr.slice(4,6) + "-" +
             dateStr.slice(6,8) + "T" +
             dateStr.slice(9,11) + ":" +
-            dateStr.slice(11,13)
+            dateStr.slice(11,13) + ":00"
         );
-    } else {
+    } 
+    // journée entière
+    else {
         return new Date(
             dateStr.slice(0,4) + "-" +
             dateStr.slice(4,6) + "-" +
@@ -136,26 +153,7 @@ function parseDateICS(dateStr) {
     }
 }
 
-async function chargerAgenda() {
-    try {
-        const response = await fetch(ICS_URL);
-        const text = await response.text();
-        const events = parseICS(text);
-
-        const today = new Date();
-        const tomorrow = new Date();
-        tomorrow.setDate(today.getDate() + 1);
-
-        document.getElementById("date-aujourdhui").textContent = formatDate(today);
-        document.getElementById("date-demain").textContent = formatDate(tomorrow);
-
-        afficher(events, today, "events-today");
-        afficher(events, tomorrow, "events-tomorrow");
-
-    } catch (e) {
-        console.error(e);
-    }
-}
+// ---------------- AFFICHAGE ----------------
 
 function afficher(events, dateRef, containerId) {
     const container = document.getElementById(containerId);
@@ -167,8 +165,11 @@ function afficher(events, dateRef, containerId) {
             startDate: parseDateICS(e.start),
             endDate: parseDateICS(e.end)
         }))
-        .filter(e => e.startDate && e.startDate.toDateString() === dateRef.toDateString())
-        .sort((a,b) => a.startDate - b.startDate);
+        .filter(e =>
+            e.startDate &&
+            e.startDate.toDateString() === dateRef.toDateString()
+        )
+        .sort((a, b) => a.startDate - b.startDate);
 
     if (filtered.length === 0) {
         container.innerHTML = '<div class="vide">Aucun événement</div>';
@@ -182,12 +183,50 @@ function afficher(events, dateRef, containerId) {
         const heureDebut = formatHeure(e.startDate);
         const heureFin = e.endDate ? formatHeure(e.endDate) : "";
 
-        div.innerHTML = `<span class="heure">${heureDebut} - ${heureFin}</span> : ${e.summary}`;
+        div.innerHTML = `<span class="heure">${heureDebut} - ${heureFin}</span> : ${e.summary || "Événement"}`;
         container.appendChild(div);
     });
 }
 
-// refresh auto
+// ---------------- CHARGEMENT ----------------
+
+async function chargerAgenda() {
+    try {
+        const response = await fetch(ICS_URL);
+
+        if (!response.ok) throw new Error("Erreur chargement ICS");
+
+        const text = await response.text();
+
+        if (!text.includes("BEGIN:VCALENDAR")) {
+            throw new Error("ICS invalide");
+        }
+
+        const events = parseICS(text);
+
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+
+        document.getElementById("date-aujourdhui").textContent = formatDate(today);
+        document.getElementById("date-demain").textContent = formatDate(tomorrow);
+
+        afficher(events, today, "events-today");
+        afficher(events, tomorrow, "events-tomorrow");
+
+    } catch (error) {
+        console.error(error);
+
+        document.getElementById("events-today").innerHTML =
+            '<div class="vide">Erreur de chargement</div>';
+
+        document.getElementById("events-tomorrow").innerHTML =
+            '<div class="vide">Erreur de chargement</div>';
+    }
+}
+
+// ---------------- AUTO REFRESH ----------------
+
 chargerAgenda();
 setInterval(chargerAgenda, 5 * 60 * 1000);
 
