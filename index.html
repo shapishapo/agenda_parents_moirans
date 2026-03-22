@@ -2,57 +2,32 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agenda Parents</title>
+
+<script src="https://cdn.jsdelivr.net/npm/rrule@2.7.1/dist/es5/rrule.min.js"></script>
 
 <style>
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f4f6f8;
-    margin: 0;
-    padding: 20px;
+    font-family: Arial;
     display: flex;
     gap: 20px;
+    padding: 20px;
+    background: #f4f6f8;
 }
-
 .colonne {
     flex: 1;
     background: white;
-    border-radius: 15px;
     padding: 20px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    border-radius: 10px;
 }
-
-h1 {
-    text-align: center;
-    font-size: 3em;
-    margin-bottom: 5px;
-}
-
-h2 {
-    text-align: center;
-    font-size: 1.8em;
-    color: #666;
-    margin-bottom: 20px;
-}
-
+h1 { font-size: 3em; text-align: center; }
+h2 { text-align: center; color: gray; }
 .evenement {
-    background: #e3f2fd;
-    padding: 12px;
-    margin-bottom: 12px;
-    border-radius: 8px;
-    font-size: 1.8em;
-}
-
-.heure {
-    font-weight: bold;
-    color: #1976d2;
-}
-
-.vide {
-    text-align: center;
     font-size: 1.6em;
-    color: #888;
+    background: #e3f2fd;
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 8px;
 }
 </style>
 </head>
@@ -62,21 +37,20 @@ h2 {
 <div class="colonne">
     <h1>Aujourd'hui</h1>
     <h2 id="date-aujourdhui"></h2>
-    <div id="events-today"></div>
+    <div id="today"></div>
 </div>
 
 <div class="colonne">
     <h1>Demain</h1>
     <h2 id="date-demain"></h2>
-    <div id="events-tomorrow"></div>
+    <div id="tomorrow"></div>
 </div>
 
 <script>
-
 // 🔥 COLLE TON LIEN ICS ICI (adresse secrète Google)
-const ICS_URL = "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent("https://calendar.google.com/calendar/ical/2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a@group.calendar.google.com/public/basic.ics");
+const ICS_URL = "https://corsproxy.io/?" + encodeURIComponent("https://calendar.google.com/calendar/ical/2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a%40group.calendar.google.com/public/basic.ics");
 
-// ---------------- UTILITAIRES ----------------
+// -------- FORMAT --------
 
 function formatDate(date) {
     return date.toLocaleDateString('fr-FR', {
@@ -93,7 +67,7 @@ function formatHeure(date) {
     });
 }
 
-// ---------------- PARSER ICS ROBUSTE ----------------
+// -------- PARSE ICS --------
 
 function parseICS(data) {
     const events = [];
@@ -104,131 +78,115 @@ function parseICS(data) {
     lignes.forEach(line => {
         line = line.trim();
 
-        if (line === "BEGIN:VEVENT") {
-            event = {};
-        } else if (line === "END:VEVENT") {
+        if (line === "BEGIN:VEVENT") event = {};
+        else if (line === "END:VEVENT") {
             events.push(event);
             event = null;
-        } else if (event) {
-
-            if (line.startsWith("DTSTART")) {
-                event.start = line.substring(line.indexOf(":") + 1);
-            }
-
-            if (line.startsWith("DTEND")) {
-                event.end = line.substring(line.indexOf(":") + 1);
-            }
-
-            if (line.startsWith("SUMMARY")) {
-                event.summary = line.substring(line.indexOf(":") + 1);
-            }
+        }
+        else if (event) {
+            if (line.startsWith("DTSTART")) event.start = line.split(":")[1];
+            if (line.startsWith("DTEND")) event.end = line.split(":")[1];
+            if (line.startsWith("SUMMARY")) event.summary = line.split(":")[1];
+            if (line.startsWith("RRULE")) event.rrule = line.substring(6);
         }
     });
 
     return events;
 }
 
-// ---------------- DATE ICS → JS ----------------
+// -------- DATE ICS --------
 
-function parseDateICS(dateStr) {
-    if (!dateStr) return null;
-
-    // format avec heure
-    if (dateStr.includes("T")) {
-        return new Date(
-            dateStr.slice(0,4) + "-" +
-            dateStr.slice(4,6) + "-" +
-            dateStr.slice(6,8) + "T" +
-            dateStr.slice(9,11) + ":" +
-            dateStr.slice(11,13) + ":00"
-        );
-    } 
-    // journée entière
-    else {
-        return new Date(
-            dateStr.slice(0,4) + "-" +
-            dateStr.slice(4,6) + "-" +
-            dateStr.slice(6,8)
-        );
-    }
+function parseDateICS(str) {
+    return new Date(
+        str.slice(0,4)+"-"+str.slice(4,6)+"-"+str.slice(6,8)+"T"+
+        str.slice(9,11)+":"+str.slice(11,13)+":00"
+    );
 }
 
-// ---------------- AFFICHAGE ----------------
+// -------- GÉNÉRATION OCCURRENCES --------
+
+function generateOccurrences(event, dateStart, dateEnd) {
+    if (!event.rrule) {
+        const d = parseDateICS(event.start);
+        return [{ date: d, event }];
+    }
+
+    const options = RRule.parseString(event.rrule);
+    options.dtstart = parseDateICS(event.start);
+
+    const rule = new RRule(options);
+
+    const dates = rule.between(dateStart, dateEnd, true);
+
+    return dates.map(d => ({
+        date: d,
+        event
+    }));
+}
+
+// -------- AFFICHAGE --------
 
 function afficher(events, dateRef, containerId) {
+
+    const startDay = new Date(dateRef);
+    startDay.setHours(0,0,0,0);
+
+    const endDay = new Date(dateRef);
+    endDay.setHours(23,59,59,999);
+
     const container = document.getElementById(containerId);
     container.innerHTML = "";
 
-    const filtered = events
-        .map(e => ({
-            ...e,
-            startDate: parseDateICS(e.start),
-            endDate: parseDateICS(e.end)
-        }))
-        .filter(e =>
-            e.startDate &&
-            e.startDate.toDateString() === dateRef.toDateString()
-        )
-        .sort((a, b) => a.startDate - b.startDate);
+    let occurrences = [];
 
-    if (filtered.length === 0) {
-        container.innerHTML = '<div class="vide">Aucun événement</div>';
+    events.forEach(event => {
+        occurrences = occurrences.concat(
+            generateOccurrences(event, startDay, endDay)
+        );
+    });
+
+    occurrences.sort((a,b) => a.date - b.date);
+
+    if (occurrences.length === 0) {
+        container.innerHTML = "<div>Aucun événement</div>";
         return;
     }
 
-    filtered.forEach(e => {
+    occurrences.forEach(o => {
         const div = document.createElement("div");
         div.className = "evenement";
 
-        const heureDebut = formatHeure(e.startDate);
-        const heureFin = e.endDate ? formatHeure(e.endDate) : "";
+        const start = o.date;
+        const end = o.event.end ? parseDateICS(o.event.end) : null;
 
-        div.innerHTML = `<span class="heure">${heureDebut} - ${heureFin}</span> : ${e.summary || "Événement"}`;
+        div.innerHTML =
+            `${formatHeure(start)} - ${end ? formatHeure(end) : ""} : ${o.event.summary}`;
+
         container.appendChild(div);
     });
 }
 
-// ---------------- CHARGEMENT ----------------
+// -------- MAIN --------
 
-async function chargerAgenda() {
-    try {
-        const response = await fetch(ICS_URL);
+async function charger() {
+    const res = await fetch(ICS_URL);
+    const text = await res.text();
 
-        if (!response.ok) throw new Error("Erreur chargement ICS");
+    const events = parseICS(text);
 
-        const text = await response.text();
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
 
-        if (!text.includes("BEGIN:VCALENDAR")) {
-            throw new Error("ICS invalide");
-        }
+    document.getElementById("date-aujourdhui").textContent = formatDate(today);
+    document.getElementById("date-demain").textContent = formatDate(tomorrow);
 
-        const events = parseICS(text);
-
-        const today = new Date();
-        const tomorrow = new Date();
-        tomorrow.setDate(today.getDate() + 1);
-
-        document.getElementById("date-aujourdhui").textContent = formatDate(today);
-        document.getElementById("date-demain").textContent = formatDate(tomorrow);
-
-        afficher(events, today, "events-today");
-        afficher(events, tomorrow, "events-tomorrow");
-
-    } catch (error) {
-        console.error(error);
-
-        document.getElementById("events-today").innerHTML =
-            '<div class="vide">Erreur de chargement</div>';
-
-        document.getElementById("events-tomorrow").innerHTML =
-            '<div class="vide">Erreur de chargement</div>';
-    }
+    afficher(events, today, "today");
+    afficher(events, tomorrow, "tomorrow");
 }
 
-// ---------------- AUTO REFRESH ----------------
-
-chargerAgenda();
-setInterval(chargerAgenda, 5 * 60 * 1000);
+charger();
+setInterval(charger, 300000);
 
 </script>
 
