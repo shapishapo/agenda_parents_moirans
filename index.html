@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda Senior</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f6f8;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    gap: 20px;
+}
+
+.colonne {
+    flex: 1;
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+    text-align: center;
+    font-size: 3em;
+    margin-bottom: 5px;
+}
+
+h2 {
+    text-align: center;
+    font-size: 1.8em;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.evenement {
+    background: #e3f2fd;
+    padding: 12px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    font-size: 1.8em;
+}
+
+.heure {
+    font-weight: bold;
+    color: #1976d2;
+}
+
+.vide {
+    text-align: center;
+    font-size: 1.6em;
+    color: #888;
+}
+</style>
+</head>
+
+<body>
+
+<div class="colonne">
+    <h1>Aujourd'hui</h1>
+    <h2 id="date-aujourdhui"></h2>
+    <div id="events-today"></div>
+</div>
+
+<div class="colonne">
+    <h1>Demain</h1>
+    <h2 id="date-demain"></h2>
+    <div id="events-tomorrow"></div>
+</div>
+
+<script>
+
+// 👉 COLLE ICI TON LIEN ICS
+const ICS_URL = "TON_LIEN_ICS_ICI";
+
+function formatDate(date) {
+    return date.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+    });
+}
+
+function formatHeure(date) {
+    return date.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// Parser simple ICS
+function parseICS(data) {
+    const events = [];
+    const lignes = data.split("\n");
+
+    let event = null;
+
+    lignes.forEach(line => {
+        line = line.trim();
+
+        if (line === "BEGIN:VEVENT") event = {};
+        else if (line === "END:VEVENT") {
+            events.push(event);
+            event = null;
+        }
+        else if (event) {
+            if (line.startsWith("DTSTART")) event.start = line.split(":")[1];
+            if (line.startsWith("DTEND")) event.end = line.split(":")[1];
+            if (line.startsWith("SUMMARY")) event.summary = line.split(":")[1];
+        }
+    });
+
+    return events;
+}
+
+function parseDateICS(dateStr) {
+    if (!dateStr) return null;
+
+    if (dateStr.includes("T")) {
+        return new Date(
+            dateStr.slice(0,4) + "-" +
+            dateStr.slice(4,6) + "-" +
+            dateStr.slice(6,8) + "T" +
+            dateStr.slice(9,11) + ":" +
+            dateStr.slice(11,13)
+        );
+    } else {
+        return new Date(
+            dateStr.slice(0,4) + "-" +
+            dateStr.slice(4,6) + "-" +
+            dateStr.slice(6,8)
+        );
+    }
+}
+
+async function chargerAgenda() {
+    try {
+        const response = await fetch(ICS_URL);
+        const text = await response.text();
+        const events = parseICS(text);
+
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+
+        document.getElementById("date-aujourdhui").textContent = formatDate(today);
+        document.getElementById("date-demain").textContent = formatDate(tomorrow);
+
+        afficher(events, today, "events-today");
+        afficher(events, tomorrow, "events-tomorrow");
+
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function afficher(events, dateRef, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+
+    const filtered = events
+        .map(e => ({
+            ...e,
+            startDate: parseDateICS(e.start),
+            endDate: parseDateICS(e.end)
+        }))
+        .filter(e => e.startDate && e.startDate.toDateString() === dateRef.toDateString())
+        .sort((a,b) => a.startDate - b.startDate);
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="vide">Aucun événement</div>';
+        return;
+    }
+
+    filtered.forEach(e => {
+        const div = document.createElement("div");
+        div.className = "evenement";
+
+        const heureDebut = formatHeure(e.startDate);
+        const heureFin = e.endDate ? formatHeure(e.endDate) : "";
+
+        div.innerHTML = `<span class="heure">${heureDebut} - ${heureFin}</span> : ${e.summary}`;
+        container.appendChild(div);
+    });
+}
+
+// refresh auto
+chargerAgenda();
+setInterval(chargerAgenda, 5 * 60 * 1000);
+
+</script>
+
+</body>
+</html>
