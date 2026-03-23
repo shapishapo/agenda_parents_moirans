@@ -180,44 +180,32 @@ function afficher(events, dateRef, containerId) {
 // ✅ AJOUT : EVENEMENTS JOURNEE ENTIERE en EXCLUANT LES EVENEMENTS "JOURNEE ENTIERE" ✅
 // =========================
 
-function afficher(events, dateRef, containerId) {
+function afficherAllDay(events) {
 
-    const container = document.getElementById(containerId);
+    const container = document.getElementById("all-day-events");
     container.innerHTML = "";
 
-    const filtered = events.filter(e => {
+    const today = new Date();
 
-        // ✅ AJOUT CRUCIAL :
-        // On exclut les événements "toute la journée"
-        if (!e.start.dateTime) return false;
+    // format YYYY-MM-DD
+    const todayStr = today.toISOString().split("T")[0];
 
-        const d = new Date(e.start.dateTime);
-
-        return d.toDateString() === dateRef.toDateString();
+    const allDay = events.filter(e => {
+        return e.start.date === todayStr; // ✅ comparaison directe fiable
     });
 
-    if (filtered.length === 0) {
-        container.innerHTML = '<div class="vide">Aucun événement</div>';
+    if (allDay.length === 0) {
+        container.innerHTML = "Aucun événement";
         return;
     }
 
-    filtered.forEach(e => {
-
+    allDay.forEach(e => {
         const div = document.createElement("div");
-        div.className = "evenement";
-
-        const start = e.start.dateTime;
-        const end = e.end.dateTime;
-
-        const heureDebut = formatHeure(start);
-        const heureFin = formatHeure(end);
-
-        div.innerHTML =
-            `<strong>${heureDebut} - ${heureFin}</strong><br>${e.summary || "Événement"}`;
-
+        div.textContent = e.summary;
         container.appendChild(div);
     });
 }
+
 
 // -------- MAIN --------
 
