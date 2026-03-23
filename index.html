@@ -8,13 +8,14 @@
 body {
     font-family: Arial;
     display: flex;
+    flex-wrap: wrap; /* ✅ AJOUT : permet d’avoir 2 lignes (haut + bas) */
     gap: 20px;
     padding: 20px;
     background: #f4f6f8;
 }
 
 .colonne {
-    flex: 1;
+    flex: 1 1 45%; /* ✅ AJOUT : 2 colonnes par ligne */
     background: white;
     padding: 20px;
     border-radius: 10px;
@@ -43,10 +44,21 @@ h2 {
     font-size: 1.5em;
     color: gray;
 }
+
+/* ✅ AJOUT : style pour les nouvelles zones */
+.zone-info {
+    font-size: 2em;
+    text-align: center;
+    margin-top: 20px;
+}
 </style>
 </head>
 
 <body>
+
+<!-- =========================
+     LIGNE 1 : AGENDA CLASSIQUE
+========================= -->
 
 <div class="colonne">
     <h1>Aujourd'hui</h1>
@@ -60,11 +72,31 @@ h2 {
     <div id="tomorrow"></div>
 </div>
 
+<!-- =========================
+     LIGNE 2 : NOUVELLES ZONES
+========================= -->
+
+<!-- ✅ AJOUT : événements "toute la journée" -->
+<div class="colonne">
+    <h1>À noter aujourd’hui</h1>
+    <div id="all-day-events" class="zone-info"></div>
+</div>
+
+<!-- ✅ AJOUT : message personnalisable -->
+<div class="colonne">
+    <h1>Information importante</h1>
+
+    <!-- contenteditable = modifiable directement à l'écran -->
+    <div id="info-perso" class="zone-info" contenteditable="true">
+        Penser à prendre les médicaments à 18h
+    </div>
+</div>
+
 <script>
 
 // 🔑 A REMPLIR
-const API_KEY = "AIzaSyD2bCeEjH_nj_ln0QvuscFRszraGISiWuA";
-const CALENDAR_ID = "2d219aecd1294a5dc26a6e8290998a7891d598c3c61bf5ca6b0f2d73e0cf902a@group.calendar.google.com";
+const API_KEY = "TA_CLE_API_ICI";
+const CALENDAR_ID = "TON_CALENDAR_ID_ICI";
 
 // -------- FORMAT --------
 
@@ -109,7 +141,7 @@ async function recupererEvenements() {
     return data.items || [];
 }
 
-// -------- AFFICHAGE --------
+// -------- AFFICHAGE CLASSIQUE --------
 
 function afficher(events, dateRef, containerId) {
 
@@ -144,6 +176,35 @@ function afficher(events, dateRef, containerId) {
     });
 }
 
+// =========================
+// ✅ AJOUT : EVENEMENTS JOURNEE ENTIERE
+// =========================
+
+function afficherAllDay(events) {
+
+    const container = document.getElementById("all-day-events");
+    container.innerHTML = "";
+
+    const today = new Date();
+
+    // on filtre uniquement les événements sans heure (date seule)
+    const allDay = events.filter(e => {
+        return e.start.date &&
+               new Date(e.start.date).toDateString() === today.toDateString();
+    });
+
+    if (allDay.length === 0) {
+        container.innerHTML = "Aucun événement";
+        return;
+    }
+
+    allDay.forEach(e => {
+        const div = document.createElement("div");
+        div.textContent = e.summary;
+        container.appendChild(div);
+    });
+}
+
 // -------- MAIN --------
 
 async function charger() {
@@ -161,6 +222,9 @@ async function charger() {
 
         afficher(events, today, "today");
         afficher(events, tomorrow, "tomorrow");
+
+        // ✅ AJOUT : affichage événements journée entière
+        afficherAllDay(events);
 
     } catch (e) {
         console.error(e);
