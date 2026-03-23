@@ -115,12 +115,19 @@ function formatHeure(dateStr) {
 
 async function recupererEvenements() {
 
-    const now = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(now.getDate() + 2);
+ const now = new Date();
 
-    const timeMin = now.toISOString();
-    const timeMax = tomorrow.toISOString();
+// ✅ début de la journée (00:00)
+const startOfDay = new Date();
+startOfDay.setHours(0, 0, 0, 0);
+
+// ✅ fin de demain (23:59)
+const endOfTomorrow = new Date();
+endOfTomorrow.setDate(now.getDate() + 1);
+endOfTomorrow.setHours(23, 59, 59, 999);
+
+const timeMin = startOfDay.toISOString();
+const timeMax = endOfTomorrow.toISOString();
 
     const url =
         `https://www.googleapis.com/calendar/v3/calendars/${CALENDAR_ID}/events` +
