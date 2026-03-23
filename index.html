@@ -73,7 +73,7 @@ h2 {
 </div>
 
 <!-- =========================
-     LIGNE 2 : NOUVELLES ZONES
+     LIGNE 2 : NOUVELLES ZONES 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
 ========================= -->
 
 <!-- ✅ AJOUT : événements "toute la journée" -->
@@ -82,7 +82,7 @@ h2 {
     <div id="all-day-events" class="zone-info"></div>
 </div>
 
-<!-- ✅ 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥AJOUT : message personnalisable 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥-->
+<!-- ✅ AJOUT : message personnalisable -->
 <div class="colonne">
     <h1>Important</h1>
 
@@ -177,30 +177,44 @@ function afficher(events, dateRef, containerId) {
 }
 
 // =========================
-// ✅ AJOUT : EVENEMENTS JOURNEE ENTIERE
+// ✅ AJOUT : EVENEMENTS JOURNEE ENTIERE en EXCLUANT LES EVENEMENTS "JOURNEE ENTIERE" ✅
 // =========================
 
-function afficherAllDay(events) {
+function afficher(events, dateRef, containerId) {
 
-    const container = document.getElementById("all-day-events");
+    const container = document.getElementById(containerId);
     container.innerHTML = "";
 
-    const today = new Date();
+    const filtered = events.filter(e => {
 
-    // on filtre uniquement les événements sans heure (date seule)
-    const allDay = events.filter(e => {
-        return e.start.date &&
-               new Date(e.start.date).toDateString() === today.toDateString();
+        // ✅ AJOUT CRUCIAL :
+        // On exclut les événements "toute la journée"
+        if (!e.start.dateTime) return false;
+
+        const d = new Date(e.start.dateTime);
+
+        return d.toDateString() === dateRef.toDateString();
     });
 
-    if (allDay.length === 0) {
-        container.innerHTML = "Aucun événement";
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="vide">Aucun événement</div>';
         return;
     }
 
-    allDay.forEach(e => {
+    filtered.forEach(e => {
+
         const div = document.createElement("div");
-        div.textContent = e.summary;
+        div.className = "evenement";
+
+        const start = e.start.dateTime;
+        const end = e.end.dateTime;
+
+        const heureDebut = formatHeure(start);
+        const heureFin = formatHeure(end);
+
+        div.innerHTML =
+            `<strong>${heureDebut} - ${heureFin}</strong><br>${e.summary || "Événement"}`;
+
         container.appendChild(div);
     });
 }
