@@ -78,7 +78,7 @@ h2 {
 
 <!-- ✅ AJOUT : événements "toute la journée" -->
 <div class="colonne">
-    <h1>Poubelle de tri ? </h1>
+    <h1>Poubelle de tri ?</h1>
 </div>
 
 <!-- ✅ AJOUT : message personnalisable -->
@@ -136,16 +136,38 @@ async function recupererEvenements() {
     return data.items || [];
 }
 
-// -------- AFFICHAGE CLASSIQUE --------
+// -------- AFFICHAGE AVANCE --> EVENEMENT "TOUTE LA JOURNEE" --------
 
 function afficher(events, dateRef, containerId) {
 
     const container = document.getElementById(containerId);
     container.innerHTML = "";
 
+    const dateStr = dateRef.toISOString().split("T")[0];
+
     const filtered = events.filter(e => {
-        const d = new Date(e.start.dateTime || e.start.date);
-        return d.toDateString() === dateRef.toDateString();
+
+        // =========================
+        // CAS 1 : événement avec heure
+        // =========================
+        if (e.start.dateTime) {
+            const d = new Date(e.start.dateTime);
+            return d.toDateString() === dateRef.toDateString();
+        }
+
+        // =========================
+        // CAS 2 : événement toute la journée (CORRECTION)
+        // =========================
+        if (e.start.date && e.end.date) {
+
+            const start = e.start.date;
+            const end = e.end.date;
+
+            // vérifier si dateRef est dans l'intervalle
+            return dateStr >= start && dateStr < end;
+        }
+
+        return false;
     });
 
     if (filtered.length === 0) {
@@ -158,18 +180,26 @@ function afficher(events, dateRef, containerId) {
         const div = document.createElement("div");
         div.className = "evenement";
 
-        const start = e.start.dateTime || e.start.date;
-        const end = e.end.dateTime || e.end.date;
+        // =========================
+        // AFFICHAGE
+        // =========================
 
-        const heureDebut = e.start.dateTime ? formatHeure(start) : "Toute la journée";
-        const heureFin = e.end.dateTime ? formatHeure(end) : "";
+        if (e.start.dateTime) {
+            const heureDebut = formatHeure(e.start.dateTime);
+            const heureFin = formatHeure(e.end.dateTime);
 
-        div.innerHTML =
-            `<strong>${heureDebut} - ${heureFin}</strong><br>${e.summary || "Événement"}`;
+            div.innerHTML =
+                `<strong>${heureDebut} - ${heureFin}</strong><br>${e.summary || "Événement"}`;
+        } else {
+            // toute la journée
+            div.innerHTML =
+                `<strong>Toute la journée</strong><br>${e.summary || "Événement"}`;
+        }
 
         container.appendChild(div);
     });
 }
+
 
 // =========================
 // ✅ AJOUT : EVENEMENTS JOURNEE ENTIERE en EXCLUANT LES EVENEMENTS "JOURNEE ENTIERE" ✅
@@ -182,11 +212,10 @@ function afficherAllDay(events) {
 
     const today = new Date();
 
-    // format YYYY-MM-DD
-    const todayStr = today.toISOString().split("T")[0];
-
+    // on filtre uniquement les événements sans heure (date seule)
     const allDay = events.filter(e => {
-        return e.start.date === todayStr; // ✅ comparaison directe fiable
+        return e.start.date &&
+               new Date(e.start.date).toDateString() === today.toDateString();
     });
 
     if (allDay.length === 0) {
